@@ -1,29 +1,23 @@
-# Usar a imagem base do SDK .NET para compilar o projeto
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-
-# Definir o diretório de trabalho dentro do contêiner
+# Estágio de base - imagem do ASP.NET 8.0 para execução
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
-
-# Copiar os arquivos do projeto para o contêiner
-COPY . ./
-
-# Restaurar dependências
-RUN dotnet restore "api_render/api_render.csproj"
-
-# Compilar o projeto
-RUN dotnet publish "api_render/api_render.csproj" -c Release -o /out
-
-# Usar a imagem base do runtime para o contêiner final
-FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS final
-
-# Definir o diretório de trabalho no contêiner final
-WORKDIR /app
-
-# Copiar os arquivos compilados do contêiner de build
-COPY --from=build /out .
-
-# Expor a porta na qual a aplicação irá rodar
 EXPOSE 80
 
-# Definir o comando que vai rodar a aplicação
+# Estágio de build - imagem do SDK .NET 8.0 para compilar o projeto
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY ["api_render/api_render.csproj", "api_render/"]
+RUN dotnet restore "api_render/api_render.csproj"
+COPY . .
+WORKDIR "/src/api_render"
+RUN dotnet build "api_render.csproj" -c Release -o /app/build
+
+# Estágio de publicação - cria o pacote de release do projeto
+FROM build AS publish
+RUN dotnet publish "api_render.csproj" -c Release -o /app/publish
+
+# Estágio final - copia os arquivos de publicação e define a imagem de execução
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "api_render.dll"]

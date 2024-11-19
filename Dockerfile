@@ -1,26 +1,29 @@
-# Usando uma imagem base do .NET para o ambiente de execução
-FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS base
+# Usar a imagem base do SDK .NET para compilar o projeto
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+
+# Definir o diretório de trabalho dentro do contêiner
 WORKDIR /app
+
+# Copiar os arquivos do projeto para o contêiner
+COPY . ./
+
+# Restaurar dependências
+RUN dotnet restore "api_render/api_render.csproj"
+
+# Compilar o projeto
+RUN dotnet publish "api_render/api_render.csproj" -c Release -o /out
+
+# Usar a imagem base do runtime para o contêiner final
+FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS final
+
+# Definir o diretório de trabalho no contêiner final
+WORKDIR /app
+
+# Copiar os arquivos compilados do contêiner de build
+COPY --from=build /out .
+
+# Expor a porta na qual a aplicação irá rodar
 EXPOSE 80
 
-# Usando a imagem do SDK do .NET para construir a aplicação
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-WORKDIR /src
-
-# Copiar o arquivo de projeto e restaurar dependências
-COPY ["./api_render/api_render.csproj", "./api_render/"]
-RUN dotnet restore "./api_render/api_render.csproj"
-
-# Copiar o restante do código para dentro do container
-COPY . .
-
-# Compilar e publicar a aplicação
-WORKDIR "/src/api_render"
-RUN dotnet build "api_render.csproj" -c Release -o /app/build
-RUN dotnet publish "api_render.csproj" -c Release -o /app/publish
-
-# Criar a imagem final de execução
-FROM base AS final
-WORKDIR /app
-COPY --from=publish /app/publish .
+# Definir o comando que vai rodar a aplicação
 ENTRYPOINT ["dotnet", "api_render.dll"]
